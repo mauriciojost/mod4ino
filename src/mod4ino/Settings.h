@@ -12,6 +12,7 @@
 #include <main4ino/Actor.h>
 #include <main4ino/Boolean.h>
 #include <main4ino/Integer.h>
+#include <mod4ino/Status.h>
 
 #define CLASS_SETTINGS "ST"
 
@@ -37,6 +38,10 @@
 #define STATUS_BUFFER_SIZE 64
 #define VERSION_BUFFER_SIZE 32
 
+#define TARGET_BUFFER_SIZE 32
+#define SKIP_UPDATES_CODE "skip"
+#define UPDATE_COMMAND "update %s"
+
 enum SettingsProps {
   SettingsDebugProp = 0,    // boolean, define if the device is in debug mode
   SettingsVersionProp,      // string, defines the current version
@@ -48,6 +53,8 @@ enum SettingsProps {
   SettingsWifiSsidbProp,    // wifi ssid (backup net)
   SettingsWifiPassbProp,    // wifi pass (backup net)
   SettingsLogLevelProp,     // level of the log messages (0=Debug=verbose, 3=Error)
+  SettingsUpdateTargetProp, // target version to upgrade the firmware to
+  SettingsUpdateFreqProp,   // frequency of upgrade
   SettingsPropsDelimiter    // amount of properties
 };
 
@@ -64,7 +71,9 @@ private:
   Buffer *ssidb;
   Buffer *passb;
   Buffer *version;
+  Buffer *target;
   Metadata *md;
+  CmdExecStatus (*command)(const char *);
 
 public:
   Settings(const char *n) {
@@ -88,6 +97,11 @@ public:
     miniperiodms = FRAG_TO_SLEEP_MS_MAX;
     logLevel = (int)getLogLevel();
     md = new Metadata(n);
+    md->getTiming()->setFreq("~24h");
+
+    target = new Buffer(TARGET_BUFFER_SIZE);
+    target->load(SKIP_UPDATES_CODE);
+    command = NULL;
   }
 
   const char *getName() {
@@ -100,7 +114,24 @@ public:
       first = false;
       version->load(STRINGIFY(PROJ_VERSION));
     }
+    if (getTiming()->matches()) {
+      const char *currVersion = STRINGIFY(PROJ_VERSION);
+      if (!target->equals(currVersion) && !target->equals(SKIP_UPDATES_CODE)) {
+        log(CLASS_SETTINGS, Warn, "Have to update '%s'->'%s'", currVersion, target->getBuffer());
+        if (command != NULL) {
+          Buffer aux(64);
+          command(aux.fill(UPDATE_COMMAND, target->getBuffer()));
+        } else {
+          log(CLASS_SETTINGS, Warn, "No init.");
+        }
+      }
+    }
   }
+
+  void setup(CmdExecStatus (*cmd)(const char *)) {
+    command = cmd;
+  }
+
 
   const char *getPropName(int propIndex) {
     switch (propIndex) {
@@ -122,6 +153,10 @@ public:
         return ADVANCED_PROP_PREFIX "mperiodms";
       case (SettingsLogLevelProp):
         return DEBUG_PROP_PREFIX "logl";
+      case (SettingsUpdateTargetProp):
+        return ADVANCED_PROP_PREFIX "target";
+      case (SettingsUpdateFreqProp):
+        return ADVANCED_PROP_PREFIX "freq";
       default:
         return "";
     }
@@ -158,6 +193,12 @@ public:
         if (m == SetCustomValue) {
           setLogLevel((char)logLevel);
         }
+        break;
+      case (SettingsUpdateTargetProp):
+        setPropValue(m, targetValue, actualValue, target);
+        break;
+      case (SettingsUpdateFreqProp):
+        setPropTiming(m, targetValue, actualValue, getTiming());
         break;
       default:
         break;
