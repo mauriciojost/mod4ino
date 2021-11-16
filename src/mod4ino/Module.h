@@ -773,11 +773,19 @@ public:
           time_t s = durationToDeepSleep();
           pushLogs();
           updateIfMust();
-          deepSleepNotInterruptable(cycleBegin, s);
+          if (getBot()->getMode() == RunMode) {
+            deepSleepNotInterruptable(cycleBegin, s);
+          } else {
+            log(CLASS_MODULE, Debug, "Skip sleep if not run");
+          }
         } else {
           pushLogs();
           updateIfMust();
-          sleepInterruptable(cycleBegin, getBatchTiming()->secsToMatch(MAX_BATCH_PERIOD_SECS));
+          if (getBot()->getMode() == RunMode) {
+            sleepInterruptable(cycleBegin, getBatchTiming()->secsToMatch(MAX_BATCH_PERIOD_SECS));
+          } else {
+            log(CLASS_MODULE, Debug, "Skip sleep if not run");
+          }
         }
         break;
       case (ConfigureMode):
