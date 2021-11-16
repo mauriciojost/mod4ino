@@ -31,6 +31,16 @@
 #define CAT_BUFFER_LENGTH 512
 #endif // CAT_BUFFER_LENGTH
 
+// The module aims at waking up every X amount of deep slept seconds.
+// Imagine that we aim at waking up every hour.
+// A deep sleep of 3600 seconds could result in 3550 seconds (HW RTC not perfectly tuned).
+// If the processing finishes in 1 second, we will be ready in second 3551, so next wakeup will
+// be in 9 seconds, resulting in 2 wake-ups instead of 1 wake-up.
+// To prevent that from happening we add a tunable fixed supplement.
+#ifndef DEEP_SLEEP_SUPPLEMENT_SECS
+#define DEEP_SLEEP_SUPPLEMENT_SECS 60
+#endif // DEEP_SLEEP_SUPPLEMENT_SECS
+
 #define HELP_COMMAND_CLI                                                                                                                   \
   "\n  MODULE HELP"                                                                                                                        \
   "\n  int             : interrupt current ongoing action"                                                                                 \
@@ -774,9 +784,9 @@ public:
           pushLogs();
           updateIfMust();
           if (getBot()->getMode() == RunMode) {
-            deepSleepNotInterruptable(cycleBegin, s);
+            deepSleepNotInterruptable(cycleBegin, s + DEEP_SLEEP_SUPPLEMENT_SECS);
           } else {
-            log(CLASS_MODULE, Debug, "Skip sleep if not run");
+            log(CLASS_MODULE, Debug, "Skip sleep !RunMode");
           }
         } else {
           pushLogs();
