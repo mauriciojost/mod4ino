@@ -153,6 +153,7 @@ private:
   Buffer* (*getLogBuffer)();
 
   std::function<void (Module* md)> firstSetupFunc;
+  std::function<bool ()> needFirstSetupFunc;
    
   // Methods depending on Settings definition (to break cyclic dependency)
   void initSettings();
@@ -225,6 +226,7 @@ public:
     oneRunMode = NULL;
     getLogBuffer = NULL;
     firstSetupFunc = NULL;
+    needFirstSetupFunc = NULL;
   }
 
 public: bool pushLogs() {
@@ -343,6 +345,11 @@ public:
     firstSetupFunc = f;
   }
 
+public: 
+  void setNeedFirstSetupFunc(std::function<bool ()> f){
+    needFirstSetupFunc = f;
+  }
+
 private: 
   StartupStatus failed(Buffer msg, ModuleStartupPropertiesCode code) {
      log(CLASS_MODULE, Error, "Startup failed: %s", msg.getBuffer());
@@ -376,6 +383,19 @@ private:
 public:
   StartupStatus startupProperties() {
 
+    log(CLASS_MODULE, Info, "Load props (fs)");
+    loadFsProps();
+
+    if (firstSetupFunc != NULL) {
+       if (needFirstSetupFunc == NULL || (needFirstSetupFunc != NULL && needFirstSetupFunc())) {
+        log(CLASS_MODULE, Debug, "First setup");
+        firstSetupFunc(this);
+        propSync->fsStoreActorsProps();
+      } else {
+        log(CLASS_MODULE, Debug, "First setup skipped");
+      }
+    }
+
     if (getSettings()->getWaitOnBoot()) { // Allow to interrupt before any sync
       log(CLASS_MODULE, Debug, "Wait on boot");
       bool i = sleepInterruptable(now(), SLEEP_PERIOD_UPON_BOOT_SECS);
@@ -383,13 +403,6 @@ public:
         Buffer b("PreSync interrupted");
         return StartupStatus(ModuleStartupPropertiesCodeSuccess, ConfigureMode, b);
       }
-    }
-
-    log(CLASS_MODULE, Info, "Load props (fs)");
-    loadFsProps();
-
-    if (firstSetupFunc != NULL) {
-      firstSetupFunc(this);
     }
 
     PropSyncStatusCode serSyncd = PropSyncStatusCodeUnknown;
@@ -883,6 +896,10 @@ private: void updateIfMust() {
         }
       }
     }
+  }
+
+public: const char* getApiDeviceLogin() {
+  return apiDeviceLogin();
   }
 
 };
