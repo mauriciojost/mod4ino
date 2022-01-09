@@ -360,7 +360,7 @@ private:
   void loadFsProps() {
     log(CLASS_MODULE, Info, "Load props (fs)");
     getPropSync()->fsLoadActorsProps();
-    getPropSync()->setLoginPass(apiDeviceLogin(), apiDevicePass()); // may override credentials loaded in steps above
+    getPropSync()->setLoginPass(apiDeviceLogin(), apiDevicePass());
     getClockSync()->setLoginPass(apiDeviceLogin(), apiDevicePass());
   }
 
@@ -382,7 +382,7 @@ private:
    */
 public:
   StartupStatus startupProperties() {
-
+    bool syncdLocally = false;
     log(CLASS_MODULE, Info, "Load props (fs)");
     loadFsProps();
 
@@ -391,6 +391,7 @@ public:
         log(CLASS_MODULE, Debug, "First setup");
         firstSetupFunc(this);
         propSync->fsStoreActorsProps();
+        syncdLocally = true;
       } else {
         log(CLASS_MODULE, Debug, "First setup skipped");
       }
@@ -406,8 +407,13 @@ public:
     }
 
     PropSyncStatusCode serSyncd = PropSyncStatusCodeUnknown;
-    log(CLASS_MODULE, Info, "Pull&push props (server)");
-    serSyncd = getPropSync()->pullPushActors(false); // sync properties from the server
+    if (syncdLocally) {
+      log(CLASS_MODULE, Info, "Push props (server)");
+      serSyncd = getPropSync()->pushActorsSimple(true); // sync properties from the server
+    } else {
+      log(CLASS_MODULE, Info, "Pull&push props (server)");
+      serSyncd = getPropSync()->pullPushActors(false); // sync properties from the server
+    }
 
     if (getPropSync()->isFailure(serSyncd)) {
       Buffer b(ERR_BUFFER_LENGTH);
